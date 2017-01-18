@@ -463,57 +463,60 @@ static CTTelephonyNetworkInfo *_telephonyNetworkInfo;
 
 - (void)flushWithMaxSize:(NSUInteger)maxBatchSize
 {
+    __weak typeof(self) weakSelf = self;
     [self dispatchBackground:^{
-        if ([self.queue count] == 0) {
-            SEGLog(@"%@ No queued API calls to flush.", self);
-            [self endBackgroundTask];
+        if ([weakSelf.queue count] == 0) {
+            SEGLog(@"%@ No queued API calls to flush.", weakSelf);
+            [weakSelf endBackgroundTask];
             return;
         }
-        if (self.batchRequest != nil) {
-            SEGLog(@"%@ API request already in progress, not flushing again.", self);
+        if (weakSelf.batchRequest != nil) {
+            SEGLog(@"%@ API request already in progress, not flushing again.", weakSelf);
             return;
         }
 
         NSArray *batch;
-        if ([self.queue count] >= maxBatchSize) {
-            batch = [self.queue subarrayWithRange:NSMakeRange(0, maxBatchSize)];
+        if ([weakSelf.queue count] >= maxBatchSize) {
+            batch = [weakSelf.queue subarrayWithRange:NSMakeRange(0, maxBatchSize)];
         } else {
-            batch = [NSArray arrayWithArray:self.queue];
+            batch = [NSArray arrayWithArray:weakSelf.queue];
         }
 
-        [self sendData:batch];
+        [weakSelf sendData:batch];
     }];
 }
 
 - (void)flushQueueByLength
 {
+    __weak typeof(self) weakSelf = self;
     [self dispatchBackground:^{
-        SEGLog(@"%@ Length is %lu.", self, (unsigned long)self.queue.count);
+        SEGLog(@"%@ Length is %lu.", weakSelf, (unsigned long)weakSelf.queue.count);
 
-        if (self.batchRequest == nil && [self.queue count] >= self.configuration.flushAt) {
-            [self flush];
+        if (weakSelf.batchRequest == nil && [weakSelf.queue count] >= weakSelf.configuration.flushAt) {
+            [weakSelf flush];
         }
     }];
 }
 
 - (void)reset
 {
+    __weak typeof(self) weakSelf = self;
     [self dispatchBackgroundAndWait:^{
-        [self.storage removeKey:SEGUserIdKey];
+        [weakSelf.storage removeKey:SEGUserIdKey];
 #if TARGET_OS_TV
-        [self.storage removeKey:SEGTraitsKey];
-        [self.storage removeKey:SEGQueueKey];
+        [weakSelf.storage removeKey:SEGTraitsKey];
+        [weakSelf.storage removeKey:SEGQueueKey];
 #else
-        [self.storage removeKey:kSEGUserIdFilename];
-        [self.storage removeKey:kSEGTraitsFilename];
-        [self.storage removeKey:kSEGQueueFilename];
+        [weakSelf.storage removeKey:kSEGUserIdFilename];
+        [weakSelf.storage removeKey:kSEGTraitsFilename];
+        [weakSelf.storage removeKey:kSEGQueueFilename];
 #endif
 
-        self.userId = nil;
-        self.traits = [NSMutableDictionary dictionary];
-        self.queue = [NSMutableArray array];
-        [self.batchRequest cancel];
-        self.batchRequest = nil;
+        weakSelf.userId = nil;
+        weakSelf.traits = [NSMutableDictionary dictionary];
+        weakSelf.queue = [NSMutableArray array];
+        [weakSelf.batchRequest cancel];
+        weakSelf.batchRequest = nil;
     }];
 }
 
@@ -534,24 +537,25 @@ static CTTelephonyNetworkInfo *_telephonyNetworkInfo;
     SEGLog(@"%@ Flushing %lu of %lu queued API calls.", self, (unsigned long)batch.count, (unsigned long)self.queue.count);
     SEGLog(@"Flushing batch %@.", payload);
 
+    __weak typeof(self) weakSelf = self;
     self.batchRequest = [self.httpClient upload:payload forWriteKey:self.configuration.writeKey completionHandler:^(BOOL retry) {
-        [self dispatchBackground:^{
+        [weakSelf dispatchBackground:^{
             if (retry) {
-                [self notifyForName:SEGSegmentRequestDidFailNotification userInfo:batch];
-                self.batchRequest = nil;
-                [self endBackgroundTask];
+                [weakSelf notifyForName:SEGSegmentRequestDidFailNotification userInfo:batch];
+                weakSelf.batchRequest = nil;
+                [weakSelf endBackgroundTask];
                 return;
             }
             
-            [self.queue removeObjectsInArray:batch];
-            [self persistQueue];
-            [self notifyForName:SEGSegmentRequestDidSucceedNotification userInfo:batch];
-            self.batchRequest = nil;
-            [self endBackgroundTask];
+            [weakSelf.queue removeObjectsInArray:batch];
+            [weakSelf persistQueue];
+            [weakSelf notifyForName:SEGSegmentRequestDidSucceedNotification userInfo:batch];
+            weakSelf.batchRequest = nil;
+            [weakSelf endBackgroundTask];
         }];
     }];
 
-    [self notifyForName:SEGSegmentDidSendRequestNotification userInfo:batch];
+    [weakSelf notifyForName:SEGSegmentDidSendRequestNotification userInfo:batch];
 }
 
 - (void)applicationDidEnterBackground
